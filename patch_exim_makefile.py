@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 """
 Attempt to figure out what options need to be added to the Exim
 Makefile to embed a Python interpreter for your particular platform.
@@ -28,6 +28,7 @@ def patch_makefile(source_dir, build_dir):
     extralibs = '%s -lpython%s' % (cfg('LDFLAGS'), cfg('VERSION'))
     source = os.path.join('Local', SOURCE_FILE)
     has_options = True
+    have_local_scan = True
 
     #
     # Look for existing CFLAGS and EXTRALIBS lines, and append info.
@@ -49,8 +50,10 @@ def patch_makefile(source_dir, build_dir):
         if makefile[i].startswith('LOCAL_SCAN_HAS_OPTIONS='):
             makefile[i] = 'LOCAL_SCAN_HAS_OPTIONS=yes\n'
             has_options = False
+        if makefile[i].startswith('HAVE_LOCAL_SCAN='):
+            makefile[i] = 'HAVE_LOCAL_SCAN=yes\n'
+            have_local_scan = False
 
-    #
     # Didn't update/replace existing lines? append new ones
     #
     if cflags:
@@ -61,6 +64,8 @@ def patch_makefile(source_dir, build_dir):
         makefile.append('LOCAL_SCAN_SOURCE=%s\n' % source)
     if has_options:
         makefile.append('LOCAL_SCAN_HAS_OPTIONS=yes\n')
+    if have_local_scan:
+        makefile.append('HAVE_LOCAL_SCAN=yes\n')
 
     #
     # Write out updated makefile
