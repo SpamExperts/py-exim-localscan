@@ -11,81 +11,66 @@ module, cross your fingers.
 """
 import os
 import os.path
-from distutils import sysconfig
+import shutil
+
+EXTRALIBS = "-lz -lm -lpthread -ldl -lutil -Xlinker -export-dynamic -Wl,-O1 -Wl,-Bsymbolic-functions"
+
+CONFIG = {
+    "python2": {
+        "CFLAGS": "-fPIC",
+        "INCLUDE": "-I/usr/local/include/python2.7",
+        "EXTRALIBS": "/usr/local/lib/python2.7/config/libpython2.7.a "
+        + EXTRALIBS,
+        "LOCAL_SCAN_SOURCE": "expy_local_scan.c",
+    },
+    "python3": {
+        "CFLAGS": "-fPIC",
+        "INCLUDE": "-I/usr/include/python3.9",
+        "EXTRALIBS": "-lpython3.9 " + EXTRALIBS,
+        "LOCAL_SCAN_SOURCE": "expy_local_scan_py3.c",
+    },
+}
 
 
-SOURCE_FILE = 'expy_local_scan.c'
+def patch_makefile(source_dir, build_dir, python_version):
+    makefile_name = os.path.join(build_dir, "Local", "Makefile")
 
+    makefile = open(makefile_name, "r").readlines()
 
-def patch_makefile(source_dir, build_dir):
-    makefile_name = os.path.join(build_dir, 'Local', 'Makefile')
+    makefile.append("CFLAGS+=%s\n" % CONFIG[python_version]["CFLAGS"])
+    makefile.append("INCLUDE+=%s\n" % CONFIG[python_version]["INCLUDE"])
+    makefile.append("EXTRALIBS+=%s\n" % CONFIG[python_version]["EXTRALIBS"])
+    makefile.append(
+        "LOCAL_SCAN_SOURCE=%s\n"
+        % os.path.join("Local", CONFIG[python_version]["LOCAL_SCAN_SOURCE"])
+    )
+    makefile.append("LOCAL_SCAN_HAS_OPTIONS=yes\n")
+    makefile.append("HAVE_LOCAL_SCAN=yes\n")
 
-    makefile = open(makefile_name, 'r').readlines()
-
-    cfg = sysconfig.get_config_var
-
-    cflags = '-I%s %s' % (cfg('INCLUDEPY'), cfg('CFLAGSFORSHARED'))
-    extralibs = '%s -lpython%s' % (cfg('LDFLAGS'), cfg('VERSION'))
-    source = os.path.join('Local', SOURCE_FILE)
-    has_options = True
-
-    #
-    # Look for existing CFLAGS and EXTRALIBS lines, and append info.
-    # Note if this has been done by setting cflags and extralibs to None
-    #
-    # Look for LOCAL_SCAN_SOURCE and LOCAL_SCAN_HAS_OPTIONS lines, replace
-    # if necessary.
-    #
-    for i in range(len(makefile)):
-        if makefile[i].startswith('CFLAGS=') and cflags:
-            makefile[i] = makefile[i].rstrip() + ' ' + cflags.strip() + '\n'
-            cflags = None
-        if makefile[i].startswith('EXTRALIBS=') and extralibs:
-            makefile[i] = makefile[i].rstrip() + ' ' + extralibs + '\n'
-            extralibs = None
-        if makefile[i].startswith('LOCAL_SCAN_SOURCE='):
-            makefile[i] = 'LOCAL_SCAN_SOURCE=' + source + '\n'
-            source = None
-        if makefile[i].startswith('LOCAL_SCAN_HAS_OPTIONS='):
-            makefile[i] = 'LOCAL_SCAN_HAS_OPTIONS=yes\n'
-            has_options = False
-
-    #
-    # Didn't update/replace existing lines? append new ones
-    #
-    if cflags:
-        makefile.append('CFLAGS=%s\n' % cflags)
-    if extralibs:
-        makefile.append('EXTRALIBS=%s\n' % extralibs)
-    if source:
-        makefile.append('LOCAL_SCAN_SOURCE=%s\n' % source)
-    if has_options:
-        makefile.append('LOCAL_SCAN_HAS_OPTIONS=yes\n')
-
-    #
     # Write out updated makefile
-    #
-    makefile = ''.join(makefile)
-    open(makefile_name, 'w').write(makefile)
+    makefile = "".join(makefile)
+    open(makefile_name, "w").write(makefile)
 
-    #
     # Symlink in C sourcefile
-    #
-    os.symlink(os.path.join(source_dir, SOURCE_FILE), os.path.join(build_dir, 'Local', SOURCE_FILE))
+    shutil.copy(
+        os.path.join(source_dir, CONFIG[python_version]["LOCAL_SCAN_SOURCE"]),
+        os.path.join(
+            build_dir, "Local", CONFIG[python_version]["LOCAL_SCAN_SOURCE"]
+        ),
+    )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import sys
-    if len(sys.argv) < 2:
-        print 'Attempt to patch Exim makefile to support Python local_scan'
-        print '    Usage: %s <build_dir>' % sys.argv[0]
-        print ''
-        print 'Suggested path for your local_scan module:'
-        print '    ', os.path.join(sysconfig.get_python_lib(), 'exim_local_scan.py')
+
+    if len(sys.argv) < 3:
+        print("Attempt to patch Exim makefile to support Python local_scan")
+        print("    Usage: %s <build_dir> <python2/python3>" % sys.argv[0])
+        print("")
         sys.exit(1)
 
     build_dir = sys.argv[1]
     source_dir = os.path.abspath(os.path.dirname(sys.argv[0]))
-
-    patch_makefile(source_dir, build_dir)
-
+    python_version = sys.argv[2]
+    assert python_version in ("python2", "python3")
+    patch_makefile(source_dir, build_dir, python_version)
