@@ -470,7 +470,7 @@ static PyObject *expy_child_open_exim(PyObject *self, PyObject *args)
          * An error occurred.
          */
         PyErr_Format(PyExc_OSError, "error %d", errno);
-	close(fd);
+        close(fd);
         return NULL;
     }
     close(fd);
