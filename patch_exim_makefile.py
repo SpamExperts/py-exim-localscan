@@ -35,7 +35,8 @@ CONFIG = {
 def patch_makefile(source_dir, build_dir, python_version):
     makefile_name = os.path.join(build_dir, "Local", "Makefile")
 
-    makefile = open(makefile_name, "r").readlines()
+    with open(makefile_name, "r") as fd:
+        makefile = fd.readlines()
 
     makefile.append("CFLAGS+=%s\n" % CONFIG[python_version]["CFLAGS"])
     makefile.append("INCLUDE+=%s\n" % CONFIG[python_version]["INCLUDE"])
@@ -49,7 +50,9 @@ def patch_makefile(source_dir, build_dir, python_version):
 
     # Write out updated makefile
     makefile = "".join(makefile)
-    open(makefile_name, "w").write(makefile)
+
+    with open(makefile_name, "w") as fd:
+        fd.write(makefile)
 
     # Symlink in C sourcefile
     shutil.copy(
@@ -73,5 +76,8 @@ if __name__ == "__main__":
     source_dir = os.path.abspath(os.path.dirname(sys.argv[0]))
     python_version = sys.argv[2]
     if python_version not in ("python2", "python3"):
-        raise ValueError("Invalid python_version: %r. Must be 'python2' or 'python3'." % python_version)
+        raise ValueError(
+            "Invalid python_version: %r. Must be 'python2' or 'python3'."
+            % python_version
+        )
     patch_makefile(source_dir, build_dir, python_version)
