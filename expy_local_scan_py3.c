@@ -709,9 +709,9 @@ int local_scan(int fd, uschar **return_text)
         if (!module)
             {
             *return_text = (uschar *) "Internal error";
-			log_write(0, LOG_PANIC, "Couldn't create %s module", expy_exim_module);
-			PyErr_Print();
-			return python_failure_return;
+            log_write(0, LOG_PANIC, "Couldn't create %s module", expy_exim_module);
+            PyErr_Print();
+            return python_failure_return;
             }
         Py_INCREF(module);  /* Optional: if you need to keep a reference */
         expy_exim_dict = PyModule_GetDict(module);  /* Borrowed reference */
