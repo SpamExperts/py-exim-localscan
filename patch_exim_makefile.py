@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 """
 Attempt to figure out what options need to be added to the Exim
 Makefile to embed a Python interpreter for your particular platform.
