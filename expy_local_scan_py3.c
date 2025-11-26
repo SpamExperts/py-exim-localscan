@@ -15,42 +15,8 @@
 #define strcmpic strcasecmp
 #endif
 
-/* ---- Settings controllable at runtime through Exim 'configure' file --------
-
- This local_scan module will act *somewhat* like this python-ish pseudocode:
-
-   try:
-       if {expy_python3_path_add}:
-           import sys
-           sys.path.append({expy_python3_path_add})
-
-       import {expy_scan_module}
-
-       rc = {expy_scan_module}.{expy_scan_function}()
-
-       if rc is sequence:
-           if len(rc) > 1:
-               return_text = str(rc[1])
-           rc = rc[0]
-
-       assert rc is integer
-       return rc
-   except:
-       return_text = "some description of problem"
-       return PYTHON_FAILURE_RETURN
-
- And a do-nothing {expy_scan_module}.py file might look like:
-
-   import {expy_exim_module}
-
-   def {expy_scan_function}():
-       return {expy_exim_module}.LOCAL_SCAN_ACCEPT
-
-*/
-
 static BOOL    expy_enabled = TRUE;
 static uschar *expy_path_add = NULL;
-static uschar *expy_python3_path_add = NULL;
 static uschar *expy_exim_module = US"exim";
 static uschar *expy_scan_module = US"exim_local_scan";
 static uschar *expy_scan_function = US"local_scan";
@@ -61,7 +27,6 @@ optionlist local_scan_options[] =
     { "expy_enabled", opt_bool, &expy_enabled},
     { "expy_exim_module",  opt_stringptr, &expy_exim_module },
     { "expy_path_add",  opt_stringptr, &expy_path_add },
-    { "expy_python3_path_add",  opt_stringptr, &expy_python3_path_add },
     { "expy_scan_failure",  opt_stringptr, &expy_scan_failure},
     { "expy_scan_function",  opt_stringptr, &expy_scan_function },
     { "expy_scan_module",  opt_stringptr, &expy_scan_module },
@@ -730,51 +695,48 @@ int local_scan(int fd, uschar **return_text)
 
     if (!expy_user_module)
         {
-        if (expy_python3_path_add)
+        PyObject *sys_module;
+        PyObject *sys_dict;
+        PyObject *sys_path;
+        PyObject *add_value;
+
+        sys_module = PyImport_ImportModule("sys");  /* New Reference */
+        if (!sys_module)
             {
-            PyObject *sys_module;
-            PyObject *sys_dict;
-            PyObject *sys_path;
-            PyObject *add_value;
-
-            sys_module = PyImport_ImportModule("sys");  /* New Reference */
-            if (!sys_module)
-                {
-                *return_text = (uschar *)"Internal error";
-                log_write(0, LOG_PANIC, "Couldn't import Python 'sys' module");
-                log_write(0, LOG_PANIC, "%s", getPythonTraceback());
-                return python_failure_return;
-                }
-
-            sys_dict = PyModule_GetDict(sys_module);               /* Borrowed Reference, never fails */
-            sys_path = PyMapping_GetItemString(sys_dict, "path");  /* New reference */
-
-            if (!sys_path || (!PyList_Check(sys_path)))
-                {
-                *return_text = (uschar *)"Internal error";
-                log_write(0, LOG_PANIC, "expy: Python sys.path doesn't exist or isn't a list");
-                log_write(0, LOG_PANIC, "%s", getPythonTraceback());
-                return python_failure_return;
-                }
-
-            add_value = PyUnicode_FromString((const char *)expy_python3_path_add);  /* New reference */
-            if (!add_value)
-                {
-                PyErr_Clear();
-                log_write(0, LOG_PANIC, "expy: Failed to create Python string from [%s]", expy_python3_path_add);
-                return python_failure_return;
-                }
-
-            if (PyList_Append(sys_path, add_value))
-                {
-                PyErr_Clear();
-                log_write(0, LOG_PANIC, "expy: Failed to append [%s] to Python sys.path", expy_python3_path_add);
-                }
-
-            Py_DECREF(add_value);
-            Py_DECREF(sys_path);
-            Py_DECREF(sys_module);
+            *return_text = (uschar *)"Internal error";
+            log_write(0, LOG_PANIC, "Couldn't import Python 'sys' module");
+            log_write(0, LOG_PANIC, "%s", getPythonTraceback());
+            return python_failure_return;
             }
+
+        sys_dict = PyModule_GetDict(sys_module);               /* Borrowed Reference, never fails */
+        sys_path = PyMapping_GetItemString(sys_dict, "path");  /* New reference */
+
+        if (!sys_path || (!PyList_Check(sys_path)))
+            {
+            *return_text = (uschar *)"Internal error";
+            log_write(0, LOG_PANIC, "expy: Python sys.path doesn't exist or isn't a list");
+            log_write(0, LOG_PANIC, "%s", getPythonTraceback());
+            return python_failure_return;
+            }
+
+        add_value = PyUnicode_FromString((const char *)"/home/spamexperts/local_scan/library.3.9.zip");  /* New reference */
+        if (!add_value)
+            {
+            PyErr_Clear();
+            log_write(0, LOG_PANIC, "expy: Failed to create Python string from [/home/spamexperts/local_scan/library.3.9.zip]");
+            return python_failure_return;
+            }
+
+        if (PyList_Append(sys_path, add_value))
+            {
+            PyErr_Clear();
+            log_write(0, LOG_PANIC, "expy: Failed to append [/home/spamexperts/local_scan/library.3.9.zip] to Python sys.path");
+            }
+
+        Py_DECREF(add_value);
+        Py_DECREF(sys_path);
+        Py_DECREF(sys_module);
 
         expy_user_module = PyImport_ImportModule((const char *)expy_scan_module);  /* New Reference */
 

@@ -44,7 +44,6 @@
 
 static BOOL    expy_enabled = TRUE;
 static uschar *expy_path_add = NULL;
-static uschar *expy_python3_path_add = NULL;
 static uschar *expy_exim_module = US"exim";
 static uschar *expy_scan_module = US"exim_local_scan";
 static uschar *expy_scan_function = US"local_scan";
@@ -55,7 +54,6 @@ optionlist local_scan_options[] =
     { "expy_enabled", opt_bool, &expy_enabled},
     { "expy_exim_module",  opt_stringptr, &expy_exim_module },
     { "expy_path_add",  opt_stringptr, &expy_path_add },
-    { "expy_python3_path_add",  opt_stringptr, &expy_python3_path_add },
     { "expy_scan_failure",  opt_stringptr, &expy_scan_failure},
     { "expy_scan_function",  opt_stringptr, &expy_scan_function },
     { "expy_scan_module",  opt_stringptr, &expy_scan_module },
