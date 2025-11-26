@@ -23,12 +23,18 @@ CONFIG = {
         + EXTRALIBS,
         "LOCAL_SCAN_SOURCE": "expy_local_scan.c",
     },
-    "python3": {
+    "python3.9": {
         "CFLAGS": "-fPIC",
         "INCLUDE": "-I/usr/include/python3.9",
         "EXTRALIBS": "-lpython3.9 " + EXTRALIBS,
         "LOCAL_SCAN_SOURCE": "expy_local_scan_py3.c",
     },
+    "python3.11": {
+        "CFLAGS": "-fPIC",
+        "INCLUDE": "-I/usr/include/python3.11",
+        "EXTRALIBS": "-lpython3.11 " + EXTRALIBS,
+        "LOCAL_SCAN_SOURCE": "expy_local_scan_py3.c",
+    }
 }
 
 
@@ -75,7 +81,7 @@ if __name__ == "__main__":
     build_dir = sys.argv[1]
     source_dir = os.path.abspath(os.path.dirname(sys.argv[0]))
     python_version = sys.argv[2]
-    if python_version not in ("python2", "python3"):
+    if python_version not in ("python2", "python3.9", "python3.11"):
         raise ValueError(
             "Invalid python_version: %r. Must be 'python2' or 'python3'."
             % python_version
