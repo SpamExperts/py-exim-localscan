@@ -216,7 +216,7 @@ static char *get_format_string(char *str, int need_newline)
         return str;
 
     /* Gotta make a new string, with '%'s and/or '\n' added */
-    newstr = store_get(len + percent_count + need_newline + 1);
+    newstr = store_get(len + percent_count + need_newline + 1, 0);
 
     for (p = str, q = newstr; *p; p++, q++)
         {
