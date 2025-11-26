@@ -10,10 +10,6 @@
 #include <Python.h>
 #include "local_scan.h"
 
-/* Replace strcmpic with strcasecmp for case-insensitive string comparison */
-#ifndef strcmpic
-#define strcmpic strcasecmp
-#endif
 
 static BOOL    expy_enabled = TRUE;
 static uschar *expy_path_add = NULL;
