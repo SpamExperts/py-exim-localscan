@@ -14,15 +14,17 @@ import os.path
 import shutil
 
 EXTRALIBS = " ".join(
-    "-lz",
-    "-lm",
-    "-lpthread",
-    "-ldl",
-    "-lutil",
-    "-Xlinker",
-    "-export-dynamic",
-    "-Wl,-O1",
-    "-Wl,-Bsymbolic-functions",
+    (
+        "-lz",
+        "-lm",
+        "-lpthread",
+        "-ldl",
+        "-lutil",
+        "-Xlinker",
+        "-export-dynamic",
+        "-Wl,-O1",
+        "-Wl,-Bsymbolic-functions",
+    )
 )
 
 CONFIG = {
