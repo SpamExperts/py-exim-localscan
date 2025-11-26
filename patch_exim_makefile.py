@@ -13,7 +13,17 @@ import os
 import os.path
 import shutil
 
-EXTRALIBS = "-lz -lm -lpthread -ldl -lutil -Xlinker -export-dynamic -Wl,-O1 -Wl,-Bsymbolic-functions"
+EXTRALIBS = " ".join(
+    "-lz",
+    "-lm",
+    "-lpthread",
+    "-ldl",
+    "-lutil",
+    "-Xlinker",
+    "-export-dynamic",
+    "-Wl,-O1",
+    "-Wl,-Bsymbolic-functions",
+)
 
 CONFIG = {
     "python2": {
@@ -34,7 +44,7 @@ CONFIG = {
         "INCLUDE": "-I/usr/include/python3.11",
         "EXTRALIBS": "-lpython3.11 " + EXTRALIBS,
         "LOCAL_SCAN_SOURCE": "expy_local_scan_py3.c",
-    }
+    },
 }
 
 
@@ -83,7 +93,7 @@ if __name__ == "__main__":
     python_version = sys.argv[2]
     if python_version not in ("python2", "python3.9", "python3.11"):
         raise ValueError(
-            "Invalid python_version: %r. Must be 'python2' or 'python3'."
-            % python_version
+            "Invalid python_version: %r. "
+            "Must be 'python2', 'python3.9' or 'python3.11'." % python_version
         )
     patch_makefile(source_dir, build_dir, python_version)
