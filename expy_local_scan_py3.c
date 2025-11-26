@@ -11,6 +11,17 @@
 #include "local_scan.h"
 
 
+#if PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION == 9
+static const char *PYTHON_LIB_PATH = "/home/spamexperts/local_scan/library.3.9.zip";
+static const wchar_t *PYTHON_INTERPRETER_PATH = L"/home/spamexperts/local_scan-3.9-env/bin/python";
+#elif PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION == 11
+static const char *PYTHON_LIB_PATH = "/home/spamexperts/local_scan/library.3.11.zip";
+static const wchar_t *PYTHON_INTERPRETER_PATH = L"/home/spamexperts/local_scan-3.11-env/bin/python";
+#else
+#error "Unsupported Python version"
+#endif
+
+
 static BOOL    expy_enabled = TRUE;
 static uschar *expy_path_add = NULL;
 static uschar *expy_exim_module = US"exim";
@@ -648,13 +659,7 @@ int local_scan(int fd, uschar **return_text)
 
     if (!Py_IsInitialized())  /* local_scan() may have already been run */
         {
-        /* It is definitely cleanest to set a program name here.
-        However, it's not really clear *what* name to use. In many ways,
-        Exim would be most accurate, but that will not necessarily be the
-        starting location for finding libraries that is wanted.
-        Hard-coding /usr/local/ here is SE specific, and something more
-        generic would need to be used to submit this upstream. */
-        Py_SetProgramName(L"/home/spamexperts/local_scan-3.9-env/bin/python");
+        Py_SetProgramName(PYTHON_INTERPRETER_PATH);
         Py_Initialize();
         if (PyType_Ready(&ExPy_Header_Line) < 0)
             {
@@ -716,18 +721,18 @@ int local_scan(int fd, uschar **return_text)
             return python_failure_return;
             }
 
-        add_value = PyUnicode_FromString((const char *)"/home/spamexperts/local_scan/library.3.9.zip");  /* New reference */
+        add_value = PyUnicode_FromString(PYTHON_LIB_PATH);  /* New reference */
         if (!add_value)
             {
             PyErr_Clear();
-            log_write(0, LOG_PANIC, "expy: Failed to create Python string from [/home/spamexperts/local_scan/library.3.9.zip]");
+            log_write(0, LOG_PANIC, "expy: Failed to create Python string from [%s]", PYTHON_LIB_PATH);
             return python_failure_return;
             }
 
         if (PyList_Append(sys_path, add_value))
             {
             PyErr_Clear();
-            log_write(0, LOG_PANIC, "expy: Failed to append [/home/spamexperts/local_scan/library.3.9.zip] to Python sys.path");
+            log_write(0, LOG_PANIC, "expy: Failed to append [%s] to Python sys.path", PYTHON_LIB_PATH);
             }
 
         Py_DECREF(add_value);
