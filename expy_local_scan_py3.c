@@ -5,42 +5,22 @@
  *
  */
 #include <errno.h>
+#include <strings.h>
 
 #include <Python.h>
 #include "local_scan.h"
 
-/* ---- Settings controllable at runtime through Exim 'configure' file --------
 
- This local_scan module will act *somewhat* like this python-ish pseudocode:
+#if PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION == 9
+static const char *PYTHON_LIB_PATH = "/home/spamexperts/local_scan/library.3.9.zip";
+static const wchar_t *PYTHON_INTERPRETER_PATH = L"/home/spamexperts/local_scan-3.9-env/bin/python";
+#elif PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION == 11
+static const char *PYTHON_LIB_PATH = "/home/spamexperts/local_scan/library.3.11.zip";
+static const wchar_t *PYTHON_INTERPRETER_PATH = L"/home/spamexperts/local_scan-3.11-env/bin/python";
+#else
+#error "Unsupported Python version"
+#endif
 
-   try:
-       if {expy_path_add}:
-           import sys
-           sys.path.append({expy_path_add})
-
-       import {expy_scan_module}
-
-       rc = {expy_scan_module}.{expy_scan_function}()
-
-       if rc is sequence:
-           if len(rc) > 1:
-               return_text = str(rc[1])
-           rc = rc[0]
-
-       assert rc is integer
-       return rc
-   except:
-       return_text = "some description of problem"
-       return PYTHON_FAILURE_RETURN
-
- And a do-nothing {expy_scan_module}.py file might look like:
-
-   import {expy_exim_module}
-
-   def {expy_scan_function}():
-       return {expy_exim_module}.LOCAL_SCAN_ACCEPT
-
-*/
 
 static BOOL    expy_enabled = TRUE;
 static uschar *expy_path_add = NULL;
@@ -100,12 +80,12 @@ static PyObject * expy_header_line_getattr(expy_header_line_t *self, char *name)
         }
 
     if (!strcmp(name, "text"))
-        return PyString_FromString((const char *)self->hline->text);
+        return PyUnicode_FromString((const char *)self->hline->text);
 
     if (!strcmp(name, "type"))
         {
         char ch = (char)(self->hline->type);
-        return PyString_FromStringAndSize(&ch, 1);
+        return PyUnicode_FromStringAndSize(&ch, 1);
         }
 
     PyErr_Format(PyExc_AttributeError, "Unknown attribute: %s", name);
@@ -123,14 +103,15 @@ static int expy_header_line_setattr(expy_header_line_t *self, char *name, PyObje
 
     if (!strcmp(name, "type"))
         {
-        char *p;
+        const char *p;
 #if PY_MINOR_VERSION < 5
         int len;
 #else
         Py_ssize_t len;
 #endif
 
-        if (PyString_AsStringAndSize(value, &p, &len) == -1)
+        p = PyUnicode_AsUTF8AndSize(value, &len);
+        if (p == NULL)
             return -1;
 
         if (len != 1)
@@ -150,15 +131,27 @@ static int expy_header_line_setattr(expy_header_line_t *self, char *name, PyObje
 
 static PyTypeObject ExPy_Header_Line  =
     {
-    PyObject_HEAD_INIT(NULL)    /* Workaround problem with Cygwin/GCC, by setting to &PyType_Type at runtime */
-    0,                          /*ob_size*/
+    PyVarObject_HEAD_INIT(NULL, 0)
     "ExPy Header Line",         /*tp_name*/
-    sizeof(expy_header_line_t), /*tp_size*/
+    sizeof(expy_header_line_t), /*tp_basicsize*/
     0,                          /*tp_itemsize*/
     expy_header_line_dealloc,   /*tp_dealloc*/
-    0,                          /*tp_print*/
+    0,                          /*tp_vectorcall_offset*/
     (getattrfunc) expy_header_line_getattr,  /*tp_getattr*/
     (setattrfunc) expy_header_line_setattr,  /*tp_setattr*/
+    0,                          /*tp_as_async*/
+    0,                          /*tp_repr*/
+    0,                          /*tp_as_number*/
+    0,                          /*tp_as_sequence*/
+    0,                          /*tp_as_mapping*/
+    0,                          /*tp_hash*/
+    0,                          /*tp_call*/
+    0,                          /*tp_str*/
+    0,                          /*tp_getattro*/
+    0,                          /*tp_setattro*/
+    0,                          /*tp_as_buffer*/
+    Py_TPFLAGS_DEFAULT,         /*tp_flags*/
+    "ExPy Header Line objects", /*tp_doc*/
     };
 
 
@@ -261,7 +254,7 @@ static PyObject *expy_expand_string(PyObject *self, PyObject *args)
         return NULL;
         }
 
-    return PyString_FromString((const char *)result);
+    return PyUnicode_FromString((const char *)result);
     }
 
 
@@ -349,14 +342,14 @@ static PyObject *expy_child_open(PyObject *self, PyObject *args)
     argv = PyMem_New(uschar *, argc + 1);
     for (i=0; i<argc; ++i)
         {
-        argv[i] = (uschar *)PyString_AsString(PyTuple_GET_ITEM(py_argv, i)); /* borrowed ref */
+        argv[i] = (uschar *)PyUnicode_AsUTF8(PyTuple_GET_ITEM(py_argv, i)); /* borrowed ref */
         }
     argv[argc] = NULL;
     envp_len = PySequence_Size(py_envp);
     envp = PyMem_New(uschar *, envp_len + 1);
     for (i=0; i<envp_len; ++i)
         {
-        envp[i] = (uschar *)PyString_AsString(PyTuple_GET_ITEM(py_envp, i)); /* borrowed ref */
+        envp[i] = (uschar *)PyUnicode_AsUTF8(PyTuple_GET_ITEM(py_envp, i)); /* borrowed ref */
         }
     envp[envp_len] = NULL;
     pid = child_open(argv, envp, umask, &infdptr, &outfdptr, (BOOL) make_leader);
@@ -416,7 +409,7 @@ static PyObject *expy_child_close(PyObject *self, PyObject *args)
         return NULL;
     }
 
-    return PyInt_FromLong(result);
+    return PyLong_FromLong(result);
     }
 
 /*
@@ -449,11 +442,11 @@ static PyObject *expy_child_open_exim(PyObject *self, PyObject *args)
          * An error occurred.
          */
         PyErr_Format(PyExc_OSError, "error %d", errno);
-	close(fd);
+        close(fd);
         return NULL;
     }
     close(fd);
-    return PyInt_FromLong(exim_pid);
+    return PyLong_FromLong(exim_pid);
     }
 
 
@@ -469,6 +462,18 @@ static PyMethodDef expy_exim_methods[] =
     {NULL, NULL, 0, NULL}
     };
 
+static struct PyModuleDef expy_exim_moduledef = {
+    PyModuleDef_HEAD_INIT,
+    "exim",               /* m_name */
+    "Exim local_scan Python interface",  /* m_doc */
+    -1,                   /* m_size */
+    expy_exim_methods,    /* m_methods */
+    NULL,                 /* m_reload */
+    NULL,                 /* m_traverse */
+    NULL,                 /* m_clear */
+    NULL,                 /* m_free */
+};
+
 
 /* ------------  Helper Functions for local_scan ---------- */
 
@@ -480,7 +485,7 @@ static void expy_dict_string(char *key, uschar *val)
     PyObject *s;
 
     if (val)
-        s = PyString_FromString((const char *)val);
+        s = PyUnicode_FromString((const char *)val);
     else
         {
         s = Py_None;
@@ -498,7 +503,7 @@ static void expy_dict_int(char *key, int val)
     {
     PyObject *i;
 
-    i = PyInt_FromLong(val);
+    i = PyLong_FromLong(val);
     PyDict_SetItemString(expy_exim_dict, key, i);
     Py_DECREF(i);
     }
@@ -556,7 +561,7 @@ static PyObject *get_recipients()
 
     result = PyTuple_New(recipients_count);
     for (i = 0; i < recipients_count; i++)
-        PyTuple_SetItem(result, i, PyString_FromString((const char *)recipients_list[i].address));
+        PyTuple_SetItem(result, i, PyUnicode_FromString((const char *)recipients_list[i].address));
 
     return result;
     }
@@ -606,11 +611,11 @@ char* getPythonTraceback()
             value == NULL ? Py_None : value,
             traceback == NULL ? Py_None : traceback);
 
-        emptyString = PyString_FromString("");
+        emptyString = PyUnicode_FromString("");
         strRetval = PyObject_CallMethod(emptyString, "join",
             "O", tbList);
 
-        chrRetval = strdup(PyString_AsString(strRetval));
+        chrRetval = strdup(PyUnicode_AsUTF8(strRetval));
 
         Py_DECREF(tbList);
         Py_DECREF(emptyString);
@@ -640,7 +645,7 @@ int local_scan(int fd, uschar **return_text)
     PyObject *original_recipients;
     PyObject *working_recipients;
 
-    log_write(0, LOG_MAIN, "Run with Python 2 local_scan");
+    log_write(0, LOG_MAIN, "Run with Python 3 local_scan");
 
     if (!expy_enabled)
         return LOCAL_SCAN_ACCEPT;
@@ -654,72 +659,85 @@ int local_scan(int fd, uschar **return_text)
 
     if (!Py_IsInitialized())  /* local_scan() may have already been run */
         {
-        /* It is definitely cleanest to set a program name here.
-        However, it's not really clear *what* name to use. In many ways,
-        Exim would be most accurate, but that will not necessarily be the
-        starting location for finding libraries that is wanted.
-        Hard-coding /usr/local/ here is SE specific, and something more
-        generic would need to be used to submit this upstream. */
-        Py_SetProgramName("/usr/local/bin/python");
+        Py_SetProgramName(PYTHON_INTERPRETER_PATH);
         Py_Initialize();
-        ExPy_Header_Line.ob_type = &PyType_Type;
+        if (PyType_Ready(&ExPy_Header_Line) < 0)
+            {
+            *return_text = (uschar *)"Internal error";
+            log_write(0, LOG_PANIC, "Failed to initialize ExPy_Header_Line type");
+            return python_failure_return;
+            }
         }
 
     if (!expy_exim_dict)
-        {
-        PyObject *module = Py_InitModule((const char *)expy_exim_module, expy_exim_methods); /* Borrowed reference */
-        Py_INCREF(module);                                 /* convert to New reference */
-        expy_exim_dict = PyModule_GetDict(module);         /* Borrowed reference */
-        Py_INCREF(expy_exim_dict);                         /* convert to New reference */
+    {
+        PyObject *module = PyModule_Create(&expy_exim_moduledef);  /* New reference */
+        if (!module)
+            {
+            *return_text = (uschar *) "Internal error";
+            log_write(0, LOG_PANIC, "Couldn't create %s module", expy_exim_module);
+            PyErr_Print();
+            return python_failure_return;
+            }
+        Py_INCREF(module);  /* Optional: if you need to keep a reference */
+        expy_exim_dict = PyModule_GetDict(module);  /* Borrowed reference */
+        Py_INCREF(expy_exim_dict);  /* Convert to New reference */
+
+        /* Add the module to sys.modules to make it importable */
+        PyObject *sys_modules = PyImport_GetModuleDict();  /* Borrowed reference */
+        if (PyDict_SetItemString(sys_modules, (const char *)expy_exim_module, module) < 0)
+            {
+            *return_text = (uschar *) "Internal error";
+            log_write(0, LOG_PANIC, "Failed to add %s module to sys.modules", expy_exim_module);
+            Py_DECREF(module);
+            return python_failure_return;
+            }
         }
 
     if (!expy_user_module)
         {
-        if (expy_path_add)
+        PyObject *sys_module;
+        PyObject *sys_dict;
+        PyObject *sys_path;
+        PyObject *add_value;
+
+        sys_module = PyImport_ImportModule("sys");  /* New Reference */
+        if (!sys_module)
             {
-            PyObject *sys_module;
-            PyObject *sys_dict;
-            PyObject *sys_path;
-            PyObject *add_value;
-
-            sys_module = PyImport_ImportModule("sys");  /* New Reference */
-            if (!sys_module)
-                {
-                *return_text = (uschar *)"Internal error";
-                log_write(0, LOG_PANIC, "Couldn't import Python 'sys' module");
-                log_write(0, LOG_PANIC, "%s", getPythonTraceback());
-                return python_failure_return;
-                }
-
-            sys_dict = PyModule_GetDict(sys_module);               /* Borrowed Reference, never fails */
-            sys_path = PyMapping_GetItemString(sys_dict, "path");  /* New reference */
-
-            if (!sys_path || (!PyList_Check(sys_path)))
-                {
-                *return_text = (uschar *)"Internal error";
-                log_write(0, LOG_PANIC, "expy: Python sys.path doesn't exist or isn't a list");
-                log_write(0, LOG_PANIC, "%s", getPythonTraceback());
-                return python_failure_return;
-                }
-
-            add_value = PyString_FromString((const char *)expy_path_add);  /* New reference */
-            if (!add_value)
-                {
-                PyErr_Clear();
-                log_write(0, LOG_PANIC, "expy: Failed to create Python string from [%s]", expy_path_add);
-                return python_failure_return;
-                }
-
-            if (PyList_Append(sys_path, add_value))
-                {
-                PyErr_Clear();
-                log_write(0, LOG_PANIC, "expy: Failed to append [%s] to Python sys.path", expy_path_add);
-                }
-
-            Py_DECREF(add_value);
-            Py_DECREF(sys_path);
-            Py_DECREF(sys_module);
+            *return_text = (uschar *)"Internal error";
+            log_write(0, LOG_PANIC, "Couldn't import Python 'sys' module");
+            log_write(0, LOG_PANIC, "%s", getPythonTraceback());
+            return python_failure_return;
             }
+
+        sys_dict = PyModule_GetDict(sys_module);               /* Borrowed Reference, never fails */
+        sys_path = PyMapping_GetItemString(sys_dict, "path");  /* New reference */
+
+        if (!sys_path || (!PyList_Check(sys_path)))
+            {
+            *return_text = (uschar *)"Internal error";
+            log_write(0, LOG_PANIC, "expy: Python sys.path doesn't exist or isn't a list");
+            log_write(0, LOG_PANIC, "%s", getPythonTraceback());
+            return python_failure_return;
+            }
+
+        add_value = PyUnicode_FromString(PYTHON_LIB_PATH);  /* New reference */
+        if (!add_value)
+            {
+            PyErr_Clear();
+            log_write(0, LOG_PANIC, "expy: Failed to create Python string from [%s]", PYTHON_LIB_PATH);
+            return python_failure_return;
+            }
+
+        if (PyList_Append(sys_path, add_value))
+            {
+            PyErr_Clear();
+            log_write(0, LOG_PANIC, "expy: Failed to append [%s] to Python sys.path", PYTHON_LIB_PATH);
+            }
+
+        Py_DECREF(add_value);
+        Py_DECREF(sys_path);
+        Py_DECREF(sys_module);
 
         expy_user_module = PyImport_ImportModule((const char *)expy_scan_module);  /* New Reference */
 
@@ -836,7 +854,7 @@ int local_scan(int fd, uschar **return_text)
             {
             PyObject *addr = PySequence_GetItem(working_recipients, i);
             if (!PySequence_Contains(original_recipients, addr))
-                receive_add_recipient((uschar *)PyString_AsString(addr), -1);
+                receive_add_recipient((uschar *)PyUnicode_AsUTF8(addr), -1);
             Py_DECREF(addr);
             }
         }
@@ -859,9 +877,7 @@ int local_scan(int fd, uschar **return_text)
             PyObject *str;
             PyObject *obj = PySequence_GetItem(result, 1);   /* New reference */
             str = PyObject_Str(obj);                         /* New reference */
-
-            *return_text = string_copy((uschar *)PyString_AsString(str));
-
+            *return_text = string_copy((uschar *)PyUnicode_AsUTF8(str));
             Py_DECREF(obj);
             Py_DECREF(str);
             }
@@ -872,9 +888,9 @@ int local_scan(int fd, uschar **return_text)
         }
 
     /* If we have an integer, return that to Exim */
-    if (PyInt_Check(result))
+    if (PyLong_Check(result))
         {
-        int rc = PyInt_AsLong(result);
+        int rc = PyLong_AsLong(result);
         Py_DECREF(result);
         return rc;
         }
