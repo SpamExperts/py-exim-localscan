@@ -645,7 +645,7 @@ int local_scan(int fd, uschar **return_text)
     PyObject *original_recipients;
     PyObject *working_recipients;
 
-    log_write(0, LOG_MAIN, "Run with Python 3 local_scan");
+    log_write(0, LOG_MAIN, "Run with Python 3 local_scan env %s %s", PYTHON_LIB_PATH, PYTHON_INTERPRETER_PATH);
 
     if (!expy_enabled)
         return LOCAL_SCAN_ACCEPT;
